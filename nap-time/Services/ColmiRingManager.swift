@@ -39,6 +39,14 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     // Stream continuations
     private var hrContinuation: AsyncStream<HeartRateReading>.Continuation?
     private var ppgContinuation: AsyncStream<PPGSample>.Continuation?
+    private var ibiContinuation: AsyncStream<InterBeatInterval>.Continuation?
+
+    // Rolling packet-rate instrumentation
+    private var ppgPacketsInWindow = 0
+    private var hrPacketsInWindow = 0
+    private var rateWindowStart: Date = .now
+    // Per-(command, subtype) packet counts for diagnosing firmware output
+    private var packetHistogram: [String: Int] = [:]
 
     // MARK: - Init
 
@@ -112,6 +120,18 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         logger.info("Stopped real-time HR monitoring")
     }
 
+    func startHRVMonitoring() {
+        writeCommand(BLEConstants.startHRVPacket())
+        startKeepAliveTimer()
+        logger.info("Started real-time HRV monitoring")
+    }
+
+    func stopHRVMonitoring() {
+        writeCommand(BLEConstants.stopHRVPacket())
+        stopKeepAliveTimer()
+        logger.info("Stopped real-time HRV monitoring")
+    }
+
     func startPPGStreaming() {
         writeCommand(BLEConstants.enablePPGPacket())
         logger.info("Started raw PPG streaming")
@@ -128,11 +148,14 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
 
     func stopMonitoring() {
         stopHeartRateMonitoring()
+        stopHRVMonitoring()
         stopPPGStreaming()
         hrContinuation?.finish()
         ppgContinuation?.finish()
+        ibiContinuation?.finish()
         hrContinuation = nil
         ppgContinuation = nil
+        ibiContinuation = nil
     }
 
     // MARK: - Stream Factories
@@ -157,6 +180,18 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         }
     }
 
+    /// Native ring-computed inter-beat intervals (ms), emitted ~once per heartbeat
+    /// from the `0x69 0x0A` (HRV) real-time command.
+    func makeIBIStream() -> AsyncStream<InterBeatInterval> {
+        ibiContinuation?.finish()
+        return AsyncStream { continuation in
+            self.ibiContinuation = continuation
+            continuation.onTermination = { @Sendable _ in
+                // Continuation cleaned up
+            }
+        }
+    }
+
     // MARK: - Private Helpers
 
     private func writeCommand(_ data: Data) {
@@ -172,7 +207,10 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         stopKeepAliveTimer()
         keepAliveTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.writeCommand(BLEConstants.keepAliveHRPacket())
+                // Re-send the HRV CONTINUE packet to prevent the ring from timing out
+                // the real-time session. The generic `0x1E` keep-alive only applies to the
+                // HR (0x69 0x01) stream; HRV (0x69 0x0A) needs `0x69 [0x0A, CONTINUE]`.
+                self?.writeCommand(BLEConstants.continueHRVPacket())
             }
         }
     }
@@ -186,7 +224,30 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
 
     private func handleNotification(data: Data) {
         let hex = data.map { String(format: "%02x", $0) }.joined(separator: " ")
-        logger.debug("RX [\(data.count) bytes]: \(hex)")
+        logger.info("RX [\(data.count) bytes]: \(hex)")
+
+        // Per-(cmd, subtype) histogram for diagnosing what the firmware is emitting
+        if data.count >= 2 {
+            let key = String(format: "cmd=%02x sub=%02x", data[0], data[1])
+            packetHistogram[key, default: 0] += 1
+        } else if data.count >= 1 {
+            let key = String(format: "cmd=%02x sub=--", data[0])
+            packetHistogram[key, default: 0] += 1
+        }
+
+        let now = Date.now
+        let elapsed = now.timeIntervalSince(rateWindowStart)
+        if elapsed >= 1.0 {
+            let ppgRate = Double(ppgPacketsInWindow) / elapsed
+            let hrRate  = Double(hrPacketsInWindow)  / elapsed
+            let histo = packetHistogram.sorted { $0.key < $1.key }
+                .map { "\($0.key):\($0.value)" }.joined(separator: ", ")
+            logger.info("Packet rate over \(elapsed, format: .fixed(precision: 2))s — PPG: \(ppgRate, format: .fixed(precision: 2))/s, HR: \(hrRate, format: .fixed(precision: 2))/s | histo: \(histo)")
+            ppgPacketsInWindow = 0
+            hrPacketsInWindow = 0
+            packetHistogram.removeAll(keepingCapacity: true)
+            rateWindowStart = now
+        }
 
         guard data.count >= 4 else {
             logger.debug("Ignoring very short packet (\(data.count) bytes)")
@@ -197,9 +258,13 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
 
         switch commandByte {
         case BLEConstants.Command.startRealTime.rawValue:
+            hrPacketsInWindow += 1
             parseHeartRateResponse(data: data)
 
         case BLEConstants.Command.rawSensor.rawValue:
+            if data[1] == BLEConstants.PPGResponseType.ppgWaveform.rawValue {
+                ppgPacketsInWindow += 1
+            }
             parseRawSensorResponse(data: data)
 
         case BLEConstants.Command.battery.rawValue:
@@ -213,20 +278,41 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     private func parseHeartRateResponse(data: Data) {
         let readingType = data[1]
         let errorCode = data[2]
-        let bpmValue = Int(data[3])
+        let value = Int(data[3])
 
-        logger.info("HR response: type=\(readingType) error=\(errorCode) bpm=\(bpmValue)")
+        // HRV response: inter-beat interval (ms) lives in bytes 6–7 (little-endian UInt16).
+        // Empirically discovered from live packet capture: `69 0a 00 00 00 00 LO HI 00 00 ...`.
+        // Warm-up packets have all zeros; valid IBIs show up at ~2 Hz (one per heartbeat).
+        if readingType == BLEConstants.ReadingType.hrv.rawValue {
+            guard data.count >= 8 else { return }
+            let ibiMs = Int(UInt16(data[6]) | (UInt16(data[7]) << 8))
+            logger.info("HRV response: error=\(errorCode) ibi=\(ibiMs)ms")
+            guard errorCode == 0, ibiMs >= 300, ibiMs <= 2000 else { return }
+
+            let now = Date.now
+            let ibi = InterBeatInterval(timestamp: now, intervalMs: Double(ibiMs), isValid: true)
+            ibiContinuation?.yield(ibi)
+
+            // Derive instantaneous BPM from the IBI so the UI has a live heart-rate readout
+            // even though the native HR stream (0x69 0x01) is mutually exclusive with HRV.
+            let bpm = Int((60000.0 / Double(ibiMs)).rounded())
+            latestHR = bpm
+            hrContinuation?.yield(HeartRateReading(timestamp: now, bpm: bpm))
+            return
+        }
+
+        logger.info("HR response: type=\(readingType) error=\(errorCode) bpm=\(value)")
 
         guard errorCode == 0,
               readingType == BLEConstants.ReadingType.heartRate.rawValue,
-              bpmValue > 0 else {
+              value > 0 else {
             return
         }
 
         // Always update latestHR so the UI can show BPM even outside a nap session
-        latestHR = bpmValue
+        latestHR = value
 
-        let reading = HeartRateReading(timestamp: .now, bpm: bpmValue)
+        let reading = HeartRateReading(timestamp: .now, bpm: value)
         hrContinuation?.yield(reading)
     }
 
@@ -371,11 +457,13 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
                 }
             }
 
-            // Once both characteristics are ready, request battery and start HR streaming
+            // Once both characteristics are ready, request battery and start HRV streaming.
+            // HRV uses the same 0x69 command slot as HR — only one can run at a time, and
+            // HRV gives us per-beat IBIs from which we can derive instantaneous BPM.
             if rxCharacteristic != nil && txCharacteristic != nil {
                 requestBattery()
-                startHeartRateMonitoring()
-                logger.info("Auto-started HR streaming after connection")
+                startHRVMonitoring()
+                logger.info("Auto-started HRV streaming after connection")
             }
         }
     }

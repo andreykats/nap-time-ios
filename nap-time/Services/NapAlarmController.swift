@@ -22,7 +22,6 @@ final class NapAlarmController {
 
     // MARK: - Private State
 
-    private var ppgProcessor = PPGProcessor()
     private var hrvCalculator = HRVCalculator()
     private var sleepDetector = SleepOnsetDetector()
     private var config = SleepDetectionConfig()
@@ -46,7 +45,6 @@ final class NapAlarmController {
         }
 
         // Reset all processors
-        ppgProcessor.reset()
         hrvCalculator.reset()
         sleepDetector.reset()
         session.reset()
@@ -56,14 +54,14 @@ final class NapAlarmController {
         session.startTime = .now
         session.state = .calibrating(progress: 0)
 
-        // Start BLE streams
-        ringManager.startHeartRateMonitoring()
-        ringManager.startPPGStreaming()
+        // HRV was auto-started on connect; re-issue idempotently in case the stream stalled.
+        // (We don't call startHeartRateMonitoring — 0x69 HR and 0x69 HRV share the same
+        //  ring-side slot and starting HR would kill the IBI feed.)
+        ringManager.startHRVMonitoring()
 
-        // Capture streams and processors on MainActor before launching background tasks
+        // Capture streams on MainActor before launching background tasks
         let hrStream = ringManager.makeHeartRateStream()
-        let ppgStream = ringManager.makePPGStream()
-        let processor = ppgProcessor
+        let ibiStream = ringManager.makeIBIStream()
         let calculator = hrvCalculator
         let detector = sleepDetector
 
@@ -87,22 +85,19 @@ final class NapAlarmController {
                     }
                 }
 
-                // Task 2: Process PPG → IBIs → HRV → sleep detection
+                // Task 2: Consume native IBIs → HRV → sleep detection
                 group.addTask { [weak self] in
-                    for await sample in ppgStream {
+                    for await ibi in ibiStream {
                         guard !Task.isCancelled else { break }
-                        let ibis = processor.process(sample: sample)
-                        if !ibis.isEmpty {
-                            if let features = calculator.addIBIs(ibis) {
-                                let result = detector.addFeatures(features)
-                                await MainActor.run { [weak self] in
-                                    guard let self else { return }
-                                    self.session.hrvHistory.append(features)
-                                    if self.session.hrvHistory.count > 60 {
-                                        self.session.hrvHistory.removeFirst()
-                                    }
-                                    self.handleDetectionResultOnMain(result)
+                        if let features = calculator.addIBIs([ibi]) {
+                            let result = detector.addFeatures(features)
+                            await MainActor.run { [weak self] in
+                                guard let self else { return }
+                                self.session.hrvHistory.append(features)
+                                if self.session.hrvHistory.count > 60 {
+                                    self.session.hrvHistory.removeFirst()
                                 }
+                                self.handleDetectionResultOnMain(result)
                             }
                         }
                     }

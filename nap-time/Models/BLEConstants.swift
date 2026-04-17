@@ -36,6 +36,7 @@ enum BLEConstants {
     enum ReadingType: UInt8 {
         case heartRate = 0x01
         case spo2      = 0x03
+        case hrv       = 0x0A  // tahnok: RealTimeReading.HRV = 10
     }
 
     enum SensorAction: UInt8 {
@@ -86,6 +87,25 @@ enum BLEConstants {
     static func stopHRPacket() -> Data {
         makePacket(command: Command.stopRealTime.rawValue,
                    payload: [ReadingType.heartRate.rawValue])
+    }
+
+    /// Start real-time HRV streaming (native ring-computed HRV)
+    static func startHRVPacket() -> Data {
+        makePacket(command: Command.startRealTime.rawValue,
+                   payload: [ReadingType.hrv.rawValue, SensorAction.start.rawValue])
+    }
+
+    /// Keep-alive for real-time HRV stream (send every ~10s to prevent the
+    /// ring from timing out the session). Format: `0x69 [HRV, CONTINUE]`.
+    static func continueHRVPacket() -> Data {
+        makePacket(command: Command.startRealTime.rawValue,
+                   payload: [ReadingType.hrv.rawValue, SensorAction.continue.rawValue])
+    }
+
+    /// Stop real-time HRV streaming
+    static func stopHRVPacket() -> Data {
+        makePacket(command: Command.stopRealTime.rawValue,
+                   payload: [ReadingType.hrv.rawValue])
     }
 
     /// Enable raw PPG sensor streaming
