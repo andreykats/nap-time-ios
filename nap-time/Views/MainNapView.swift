@@ -29,7 +29,7 @@ struct MainNapView: View {
                 .frame(width: 12, height: 12)
                 .shadow(color: statusColor.opacity(0.5), radius: 4)
 
-            Text(controller.session.statusText)
+            Text(displayedStatusText)
                 .font(.headline)
 
             Spacer()
@@ -181,16 +181,30 @@ struct MainNapView: View {
 
     // MARK: - Helpers
 
+    private var isWarmingUp: Bool {
+        if case .idle = controller.session.state,
+           ringManager.connectionState == .connected,
+           ringManager.latestHR == 0 {
+            return true
+        }
+        return false
+    }
+
+    private var displayedStatusText: String {
+        isWarmingUp ? "Warming up.." : controller.session.statusText
+    }
+
     private var statusColor: Color {
+        if isWarmingUp { return .orange }
         switch controller.session.state {
-        case .idle: .gray
-        case .connecting: .orange
-        case .calibrating: .yellow
-        case .monitoring: .blue
-        case .sleepDetected: .green
-        case .alarming: .red
-        case .completed: .indigo
-        case .error: .red
+        case .idle: return .gray
+        case .connecting: return .orange
+        case .calibrating: return .yellow
+        case .monitoring: return .blue
+        case .sleepDetected: return .green
+        case .alarming: return .red
+        case .completed: return .indigo
+        case .error: return .red
         }
     }
 
