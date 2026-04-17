@@ -9,10 +9,9 @@ struct MainNapView: View {
         ScrollView {
             VStack(spacing: 24) {
                 statusCard
-                heartRateCard
+                controlSection
                 hrChartSection
                 hrvSection
-                controlSection
             }
             .padding()
         }
@@ -39,6 +38,23 @@ struct MainNapView: View {
                     .frame(width: 60)
                     .tint(.indigo)
             }
+
+            if displayedHR > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "heart.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .symbolEffect(.pulse, isActive: true)
+                    Text("\(displayedHR)")
+                        .font(.headline)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.snappy, value: displayedHR)
+                    Text("BPM")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding()
         .frame(maxWidth: .infinity)
@@ -50,28 +66,6 @@ struct MainNapView: View {
     /// Show session HR during nap, or live ring HR otherwise
     private var displayedHR: Int {
         controller.session.isActive ? controller.session.currentHR : ringManager.latestHR
-    }
-
-    @ViewBuilder
-    private var heartRateCard: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "heart.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.red)
-                .symbolEffect(.pulse, isActive: displayedHR > 0)
-
-            Text("\(displayedHR)")
-                .font(.system(size: 72, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .animation(.snappy, value: displayedHR)
-
-            Text("BPM")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(32)
-        .background(.ultraThinMaterial, in: .circle)
     }
 
     // MARK: - Heart Rate Chart
@@ -190,11 +184,27 @@ struct MainNapView: View {
         return false
     }
 
+    private var isRingDisconnected: Bool {
+        if case .idle = controller.session.state {
+            return ringManager.connectionState != .connected
+        }
+        return false
+    }
+
     private var displayedStatusText: String {
-        isWarmingUp ? "Warming up.." : controller.session.statusText
+        if isRingDisconnected {
+            switch ringManager.connectionState {
+            case .scanning: return "Scanning for ring.."
+            case .connecting: return "Connecting to ring.."
+            case .disconnecting: return "Disconnecting.."
+            case .disconnected, .connected: return "Ring not connected"
+            }
+        }
+        return isWarmingUp ? "Warming up.." : controller.session.statusText
     }
 
     private var statusColor: Color {
+        if isRingDisconnected { return .gray }
         if isWarmingUp { return .orange }
         switch controller.session.state {
         case .idle: return .gray

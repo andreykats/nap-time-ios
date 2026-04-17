@@ -6,7 +6,7 @@ struct ContentView: View {
     @State private var napController: NapAlarmController?
 
     enum AppTab {
-        case nap, settings, ring, calibrate
+        case nap, settings
     }
 
     var body: some View {
@@ -23,19 +23,7 @@ struct ContentView: View {
 
             SwiftUI.Tab("Settings", systemImage: "gearshape.fill", value: .settings) {
                 NavigationStack {
-                    SettingsView()
-                }
-            }
-
-            SwiftUI.Tab("Ring", systemImage: "circle.circle", value: .ring) {
-                NavigationStack {
-                    ConnectionView(ringManager: ringManager)
-                }
-            }
-
-            SwiftUI.Tab("Test", systemImage: "target", value: .calibrate) {
-                NavigationStack {
-                    CalibrationView()
+                    SettingsView(ringManager: ringManager)
                 }
             }
         }

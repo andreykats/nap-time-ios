@@ -5,7 +5,7 @@ iOS app for smart nap management using a Colmi smart ring via BLE. Detects sleep
 ## Project Structure
 
 - `nap-time/` — Main app target (SwiftUI)
-  - `Views/` — ContentView (tab nav), MainNapView, ConnectionView, SettingsView, HRVChartView, CalibrationView (tap coordinate testing)
+  - `Views/` — ContentView (tab nav), MainNapView, SettingsView (includes ring connection UI), HRVChartView
   - `Models/` — NapSession, SleepDetectionConfig, BLEConstants, HRV/PPG data types
   - `Services/` — ColmiRingManager (BLE), HRVCalculator, SleepOnsetDetector, NapAlarmController
   - `Resources/` — alarm_gentle.caf
