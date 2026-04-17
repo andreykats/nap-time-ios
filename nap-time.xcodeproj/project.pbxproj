@@ -6,14 +6,75 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		55FA33CB2F903EC500A1ECEE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55FA33CA2F903EC500A1ECEE /* WidgetKit.framework */; };
+		55FA33CD2F903EC500A1ECEE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55FA33CC2F903EC500A1ECEE /* SwiftUI.framework */; };
+		55FA33DE2F903EC600A1ECEE /* NapAlarmWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 55FA33C82F903EC500A1ECEE /* NapAlarmWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		55FA33DC2F903EC600A1ECEE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5552970E2F90341D0083691B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 55FA33C72F903EC500A1ECEE;
+			remoteInfo = NapAlarmWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		55FA33DF2F903EC600A1ECEE /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				55FA33DE2F903EC600A1ECEE /* NapAlarmWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		555297162F90341D0083691B /* nap-time.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "nap-time.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		55FA33C82F903EC500A1ECEE /* NapAlarmWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NapAlarmWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		55FA33CA2F903EC500A1ECEE /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		55FA33CC2F903EC500A1ECEE /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		55FA33E22F903EC600A1ECEE /* Exceptions for "NapAlarmWidget" folder in "NapAlarmWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 55FA33C72F903EC500A1ECEE /* NapAlarmWidgetExtension */;
+		};
+		55FA33E72F903F1900A1ECEE /* Exceptions for "nap-time" folder in "NapAlarmWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/NapAlarmMetadata.swift,
+			);
+			target = 55FA33C72F903EC500A1ECEE /* NapAlarmWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		555297182F90341D0083691B /* nap-time */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				55FA33E72F903F1900A1ECEE /* Exceptions for "nap-time" folder in "NapAlarmWidgetExtension" target */,
+			);
 			path = "nap-time";
+			sourceTree = "<group>";
+		};
+		55FA33CE2F903EC500A1ECEE /* NapAlarmWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				55FA33E22F903EC600A1ECEE /* Exceptions for "NapAlarmWidget" folder in "NapAlarmWidgetExtension" target */,
+			);
+			path = NapAlarmWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -26,6 +87,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		55FA33C52F903EC500A1ECEE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55FA33CD2F903EC500A1ECEE /* SwiftUI.framework in Frameworks */,
+				55FA33CB2F903EC500A1ECEE /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -33,6 +103,8 @@
 			isa = PBXGroup;
 			children = (
 				555297182F90341D0083691B /* nap-time */,
+				55FA33CE2F903EC500A1ECEE /* NapAlarmWidget */,
+				55FA33C92F903EC500A1ECEE /* Frameworks */,
 				555297172F90341D0083691B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,8 +113,18 @@
 			isa = PBXGroup;
 			children = (
 				555297162F90341D0083691B /* nap-time.app */,
+				55FA33C82F903EC500A1ECEE /* NapAlarmWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		55FA33C92F903EC500A1ECEE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				55FA33CA2F903EC500A1ECEE /* WidgetKit.framework */,
+				55FA33CC2F903EC500A1ECEE /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,10 +137,12 @@
 				555297122F90341D0083691B /* Sources */,
 				555297132F90341D0083691B /* Frameworks */,
 				555297142F90341D0083691B /* Resources */,
+				55FA33DF2F903EC600A1ECEE /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				55FA33DD2F903EC600A1ECEE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				555297182F90341D0083691B /* nap-time */,
@@ -69,6 +153,28 @@
 			productName = "nap-time";
 			productReference = 555297162F90341D0083691B /* nap-time.app */;
 			productType = "com.apple.product-type.application";
+		};
+		55FA33C72F903EC500A1ECEE /* NapAlarmWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 55FA33E32F903EC600A1ECEE /* Build configuration list for PBXNativeTarget "NapAlarmWidgetExtension" */;
+			buildPhases = (
+				55FA33C42F903EC500A1ECEE /* Sources */,
+				55FA33C52F903EC500A1ECEE /* Frameworks */,
+				55FA33C62F903EC500A1ECEE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				55FA33CE2F903EC500A1ECEE /* NapAlarmWidget */,
+			);
+			name = NapAlarmWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = NapAlarmWidgetExtension;
+			productReference = 55FA33C82F903EC500A1ECEE /* NapAlarmWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -81,6 +187,9 @@
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					555297152F90341D0083691B = {
+						CreatedOnToolsVersion = 26.4;
+					};
+					55FA33C72F903EC500A1ECEE = {
 						CreatedOnToolsVersion = 26.4;
 					};
 				};
@@ -100,12 +209,20 @@
 			projectRoot = "";
 			targets = (
 				555297152F90341D0083691B /* nap-time */,
+				55FA33C72F903EC500A1ECEE /* NapAlarmWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		555297142F90341D0083691B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		55FA33C62F903EC500A1ECEE /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +239,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		55FA33C42F903EC500A1ECEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		55FA33DD2F903EC600A1ECEE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 55FA33C72F903EC500A1ECEE /* NapAlarmWidgetExtension */;
+			targetProxy = 55FA33DC2F903EC600A1ECEE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5552971F2F90341E0083691B /* Debug */ = {
@@ -256,8 +388,11 @@
 				DEVELOPMENT_TEAM = S39JCV5G6C;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAlarmKitUsageDescription = "Nap Time uses alarms to wake you after detecting sleep onset.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nap Time connects to your Colmi R02 ring to monitor heart rate during naps.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -273,7 +408,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -288,8 +423,11 @@
 				DEVELOPMENT_TEAM = S39JCV5G6C;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAlarmKitUsageDescription = "Nap Time uses alarms to wake you after detecting sleep onset.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nap Time connects to your Colmi R02 ring to monitor heart rate during naps.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -303,6 +441,66 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.2;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		55FA33E02F903EC600A1ECEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S39JCV5G6C;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NapAlarmWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NapAlarmWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.andreykats.nap-time.NapAlarmWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		55FA33E12F903EC600A1ECEE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S39JCV5G6C;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NapAlarmWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NapAlarmWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.andreykats.nap-time.NapAlarmWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -327,6 +525,15 @@
 			buildConfigurations = (
 				555297222F90341E0083691B /* Debug */,
 				555297232F90341E0083691B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		55FA33E32F903EC600A1ECEE /* Build configuration list for PBXNativeTarget "NapAlarmWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				55FA33E02F903EC600A1ECEE /* Debug */,
+				55FA33E12F903EC600A1ECEE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
