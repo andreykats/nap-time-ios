@@ -38,12 +38,10 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
 
     // Stream continuations
     private var hrContinuation: AsyncStream<HeartRateReading>.Continuation?
-    private var ppgContinuation: AsyncStream<PPGSample>.Continuation?
     private var ibiContinuation: AsyncStream<InterBeatInterval>.Continuation?
 
     // Rolling packet-rate instrumentation
-    private var ppgPacketsInWindow = 0
-    private var hrPacketsInWindow = 0
+    private var packetsInWindow = 0
     private var rateWindowStart: Date = .now
     // Per-(command, subtype) packet counts for diagnosing firmware output
     private var packetHistogram: [String: Int] = [:]
@@ -132,16 +130,6 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         logger.info("Stopped real-time HRV monitoring")
     }
 
-    func startPPGStreaming() {
-        writeCommand(BLEConstants.enablePPGPacket())
-        logger.info("Started raw PPG streaming")
-    }
-
-    func stopPPGStreaming() {
-        writeCommand(BLEConstants.disablePPGPacket())
-        logger.info("Stopped raw PPG streaming")
-    }
-
     func requestBattery() {
         writeCommand(BLEConstants.batteryPacket())
     }
@@ -149,12 +137,16 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     func stopMonitoring() {
         stopHeartRateMonitoring()
         stopHRVMonitoring()
-        stopPPGStreaming()
+        finishStreams()
+    }
+
+    /// Tear down AsyncStream consumers without stopping BLE streaming from the ring.
+    /// Used at nap end: nap-specific processing tasks go away, but HRV keeps flowing so
+    /// the UI still shows a live BPM readout while the ring is connected.
+    func finishStreams() {
         hrContinuation?.finish()
-        ppgContinuation?.finish()
         ibiContinuation?.finish()
         hrContinuation = nil
-        ppgContinuation = nil
         ibiContinuation = nil
     }
 
@@ -164,16 +156,6 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         hrContinuation?.finish()
         return AsyncStream { continuation in
             self.hrContinuation = continuation
-            continuation.onTermination = { @Sendable _ in
-                // Continuation cleaned up
-            }
-        }
-    }
-
-    func makePPGStream() -> AsyncStream<PPGSample> {
-        ppgContinuation?.finish()
-        return AsyncStream { continuation in
-            self.ppgContinuation = continuation
             continuation.onTermination = { @Sendable _ in
                 // Continuation cleaned up
             }
@@ -238,13 +220,11 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         let now = Date.now
         let elapsed = now.timeIntervalSince(rateWindowStart)
         if elapsed >= 1.0 {
-            let ppgRate = Double(ppgPacketsInWindow) / elapsed
-            let hrRate  = Double(hrPacketsInWindow)  / elapsed
+            let rate = Double(packetsInWindow) / elapsed
             let histo = packetHistogram.sorted { $0.key < $1.key }
                 .map { "\($0.key):\($0.value)" }.joined(separator: ", ")
-            logger.info("Packet rate over \(elapsed, format: .fixed(precision: 2))s — PPG: \(ppgRate, format: .fixed(precision: 2))/s, HR: \(hrRate, format: .fixed(precision: 2))/s | histo: \(histo)")
-            ppgPacketsInWindow = 0
-            hrPacketsInWindow = 0
+            logger.info("Packet rate over \(elapsed, format: .fixed(precision: 2))s — \(rate, format: .fixed(precision: 2))/s | histo: \(histo)")
+            packetsInWindow = 0
             packetHistogram.removeAll(keepingCapacity: true)
             rateWindowStart = now
         }
@@ -258,14 +238,8 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
 
         switch commandByte {
         case BLEConstants.Command.startRealTime.rawValue:
-            hrPacketsInWindow += 1
+            packetsInWindow += 1
             parseHeartRateResponse(data: data)
-
-        case BLEConstants.Command.rawSensor.rawValue:
-            if data[1] == BLEConstants.PPGResponseType.ppgWaveform.rawValue {
-                ppgPacketsInWindow += 1
-            }
-            parseRawSensorResponse(data: data)
 
         case BLEConstants.Command.battery.rawValue:
             parseBatteryResponse(data: data)
@@ -314,29 +288,6 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
 
         let reading = HeartRateReading(timestamp: .now, bpm: value)
         hrContinuation?.yield(reading)
-    }
-
-    private func parseRawSensorResponse(data: Data) {
-        let subtype = data[1]
-
-        guard subtype == BLEConstants.PPGResponseType.ppgWaveform.rawValue else {
-            return
-        }
-
-        // Parse 16-bit little-endian values
-        let rawValue = UInt16(data[2]) | (UInt16(data[3]) << 8)
-        let maxVal   = UInt16(data[4]) | (UInt16(data[5]) << 8)
-        let minVal   = UInt16(data[6]) | (UInt16(data[7]) << 8)
-        let diffVal  = UInt16(data[8]) | (UInt16(data[9]) << 8)
-
-        let sample = PPGSample(
-            timestamp: .now,
-            rawValue: rawValue,
-            max: maxVal,
-            min: minVal,
-            diff: diffVal
-        )
-        ppgContinuation?.yield(sample)
     }
 
     private func parseBatteryResponse(data: Data) {

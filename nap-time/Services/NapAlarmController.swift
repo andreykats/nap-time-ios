@@ -114,7 +114,9 @@ final class NapAlarmController {
         alarmTask?.cancel()
         alarmTask = nil
 
-        ringManager.stopMonitoring()
+        // Tear down nap consumer tasks but leave the ring's HRV stream running so the UI
+        // keeps showing a live BPM between naps. Full teardown happens on BLE disconnect.
+        ringManager.finishStreams()
         cancelAlarm()
 
         let summary = NapSession.NapSummary(

@@ -29,7 +29,6 @@ enum BLEConstants {
         case startRealTime    = 0x69  // 105
         case stopRealTime     = 0x6A  // 106
         case realTimeKeepAlive = 0x1E // 30
-        case rawSensor        = 0xA1  // 161
         case battery          = 0x03
     }
 
@@ -44,17 +43,6 @@ enum BLEConstants {
         case pause    = 0x02
         case `continue` = 0x03
         case stop     = 0x04
-    }
-
-    enum RawSensorSubcommand: UInt8 {
-        case enablePPG  = 0x04
-        case disablePPG = 0x02
-    }
-
-    enum PPGResponseType: UInt8 {
-        case spo2         = 0x01
-        case ppgWaveform  = 0x02
-        case accelerometer = 0x03
     }
 
     // MARK: - Packet Builders
@@ -106,18 +94,6 @@ enum BLEConstants {
     static func stopHRVPacket() -> Data {
         makePacket(command: Command.stopRealTime.rawValue,
                    payload: [ReadingType.hrv.rawValue])
-    }
-
-    /// Enable raw PPG sensor streaming
-    static func enablePPGPacket() -> Data {
-        makePacket(command: Command.rawSensor.rawValue,
-                   payload: [RawSensorSubcommand.enablePPG.rawValue])
-    }
-
-    /// Disable raw PPG sensor streaming
-    static func disablePPGPacket() -> Data {
-        makePacket(command: Command.rawSensor.rawValue,
-                   payload: [RawSensorSubcommand.disablePPG.rawValue])
     }
 
     /// Request battery status
