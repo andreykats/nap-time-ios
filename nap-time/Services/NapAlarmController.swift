@@ -1,15 +1,11 @@
 @preconcurrency import ActivityKit
+import AlarmKit
 import Foundation
 import Observation
 import os
-import UserNotifications
+import SwiftUI
 
 private let logger = Logger(subsystem: "com.andreykats.nap-time", category: "Alarm")
-
-// TODO: Replace UserNotifications with AlarmKit once the iOS 26 SDK is available.
-// AlarmKit provides system-level alarms that break through silent mode and Focus settings,
-// appear on Lock Screen, Dynamic Island, StandBy, and Apple Watch.
-// The current implementation uses local notifications as a fallback.
 
 /// Orchestrates the entire nap monitoring pipeline:
 /// BLE streams → PPG processing → HRV computation → sleep detection → alarm.
@@ -33,6 +29,7 @@ final class NapAlarmController {
     // packets keep flowing during brief screen locks instead of being queued by iOS.
     private var liveActivity: Activity<NapAlarmAttributes>?
     private var lastActivityUpdate: Date?
+    private let alarmID = UUID()
 
     // MARK: - Init
 
@@ -72,10 +69,7 @@ final class NapAlarmController {
         // Backstop alarm: if sleep is never detected, the alarm fires napDuration
         // after Start. Replaced by the post-sleep alarm in handleDetectionResultOnMain
         // on .sleepOnsetDetected (which reschedules napDuration after onset).
-        scheduleAlarm(
-            in: TimeInterval(config.napDurationMinutes * 60),
-            body: "Nap time is up — sleep wasn't detected."
-        )
+        scheduleAlarm(in: TimeInterval(config.napDurationMinutes * 60))
 
         // HRV was auto-started on connect; re-issue idempotently in case the stream stalled.
         // (We don't call startHeartRateMonitoring — 0x69 HR and 0x69 HRV share the same
@@ -197,11 +191,8 @@ final class NapAlarmController {
             session.state = .sleepDetected(at: now)
 
             let duration = TimeInterval(config.napDurationMinutes * 60)
-            cancelAlarm()  // kills the backstop notification + task
-            scheduleAlarm(
-                in: duration,
-                body: "Time to wake up. You've been napping for \(config.napDurationMinutes) minutes."
-            )
+            cancelAlarm()  // kills the backstop alarm + task
+            scheduleAlarm(in: duration)
             let napMins = config.napDurationMinutes
             logger.info("Sleep onset detected, alarm rescheduled \(napMins) min from onset")
             updateLiveActivity(
@@ -213,50 +204,62 @@ final class NapAlarmController {
 
     // MARK: - Alarm Management
 
-    /// Schedule the alarm notification + in-process timer. Called once at session start
-    /// (as a backstop) and again on sleep onset (replacing the backstop).
-    /// TODO: Replace with AlarmKit when iOS 26 SDK is available
-    private func scheduleAlarm(in duration: TimeInterval, body: String) {
-        // Kill any previously queued alarmTask so the state transition only fires once.
+    /// Schedule an AlarmKit alarm + in-process timer. Called once at session start
+    /// (as a backstop) and again on sleep onset (replacing the backstop). AlarmKit
+    /// breaks through silent mode, Focus, and DND the way the Clock app's alarm does —
+    /// unlike local notifications, which the system silently suppresses in those modes.
+    private func scheduleAlarm(in duration: TimeInterval) {
         alarmTask?.cancel()
 
+        let onsetDate = sleepOnsetTime ?? napStartTime ?? .now
+        let napMinutes = config.napDurationMinutes
+        let fireDate = Date.now.addingTimeInterval(max(1, duration))
+        let id = alarmID
+
         Task {
-            let center = UNUserNotificationCenter.current()
+            let manager = AlarmManager.shared
             do {
-                let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-                guard granted else {
-                    logger.warning("Notification permission not granted")
+                let state = try await manager.requestAuthorization()
+                guard state == .authorized else {
+                    logger.warning("AlarmKit authorization not granted: \(String(describing: state))")
                     return
                 }
             } catch {
-                logger.error("Failed to request notification permission: \(error.localizedDescription)")
+                logger.error("Failed to request AlarmKit authorization: \(error.localizedDescription)")
                 return
             }
 
-            let content = UNMutableNotificationContent()
-            content.title = "Nap's Over!"
-            content.body = body
-            content.sound = .defaultCritical
-            content.interruptionLevel = .critical
+            // Re-scheduling replaces the previous fire time.
+            try? manager.cancel(id: id)
 
-            // A second add() with the same identifier replaces the pending request —
-            // this is how the sleep-onset alarm overrides the backstop.
-            let trigger = UNTimeIntervalNotificationTrigger(
-                timeInterval: max(1, duration),
-                repeats: false
+            let stopButton = AlarmButton(
+                text: "Stop",
+                textColor: .white,
+                systemImageName: "stop.circle.fill"
             )
-
-            let request = UNNotificationRequest(
-                identifier: "nap-alarm",
-                content: content,
-                trigger: trigger
+            let alert = AlarmPresentation.Alert(
+                title: "Nap's Over!",
+                stopButton: stopButton
+            )
+            let metadata = NapAlarmMetadata(
+                sleepDetectedAt: onsetDate,
+                napDurationMinutes: napMinutes
+            )
+            let attributes = AlarmAttributes<NapAlarmMetadata>(
+                presentation: AlarmPresentation(alert: alert),
+                metadata: metadata,
+                tintColor: .blue
+            )
+            let configuration = AlarmManager.AlarmConfiguration<NapAlarmMetadata>.alarm(
+                schedule: .fixed(fireDate),
+                attributes: attributes
             )
 
             do {
-                try await center.add(request)
-                logger.info("Alarm notification scheduled for \(duration)s from now")
+                _ = try await manager.schedule(id: id, configuration: configuration)
+                logger.info("AlarmKit alarm scheduled \(Int(duration))s from now")
             } catch {
-                logger.error("Failed to schedule alarm: \(error.localizedDescription)")
+                logger.error("Failed to schedule AlarmKit alarm: \(error.localizedDescription)")
             }
         }
 
@@ -272,9 +275,7 @@ final class NapAlarmController {
     }
 
     private func cancelAlarm() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(
-            withIdentifiers: ["nap-alarm"]
-        )
+        try? AlarmManager.shared.cancel(id: alarmID)
         alarmTask?.cancel()
         alarmTask = nil
     }

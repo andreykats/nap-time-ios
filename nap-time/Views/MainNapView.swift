@@ -150,6 +150,7 @@ struct MainNapView: View {
         VStack(spacing: 16) {
             if !controller.session.isActive {
                 Picker("Nap Duration", selection: $controller.session.napDurationMinutes) {
+                    Text("1 min").tag(1)
                     Text("15 min").tag(15)
                     Text("20 min").tag(20)
                     Text("25 min").tag(25)
