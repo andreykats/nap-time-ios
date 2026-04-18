@@ -3,6 +3,7 @@ import SwiftData
 import SwiftUI
 
 struct NapHistoryView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedNapSession.startTime, order: .reverse) private var sessions: [SavedNapSession]
 
     var body: some View {
@@ -14,17 +15,30 @@ struct NapHistoryView: View {
                     description: Text("Completed naps will appear here once you finish your first session.")
                 )
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        ForEach(sessions) { session in
-                            SavedNapCard(session: session)
-                        }
+                List {
+                    ForEach(sessions) { session in
+                        SavedNapCard(session: session)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    delete(session)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                     }
-                    .padding()
                 }
+                .listStyle(.plain)
             }
         }
         .navigationTitle("Nap History")
+    }
+
+    private func delete(_ session: SavedNapSession) {
+        modelContext.delete(session)
+        try? modelContext.save()
     }
 }
 
