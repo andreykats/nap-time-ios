@@ -30,16 +30,16 @@ nonisolated final class SleepOnsetDetector: Sendable {
         let sdLFHF: Double
     }
 
-    private let state = DetectorState()
+    private let state: DetectorState
 
     private final class DetectorState: @unchecked Sendable {
         var calibrationSamples: [HRVFeatures] = []
         var baseline: Baseline?
         var consecutiveSleepEpochs = 0
         var startTime: Date?
-        let config: SleepDetectionConfig
+        var config: SleepDetectionConfig
 
-        init(config: SleepDetectionConfig = SleepDetectionConfig()) {
+        init(config: SleepDetectionConfig) {
             self.config = config
         }
     }
@@ -52,11 +52,14 @@ nonisolated final class SleepOnsetDetector: Sendable {
     }
 
     init(config: SleepDetectionConfig = SleepDetectionConfig()) {
+        self.state = DetectorState(config: config)
         state.startTime = .now
-        // Re-create state with custom config
-        let _ = state  // state is already initialized with default
-        // We need to set config - but it's let. Use a workaround:
-        // Actually, let's just store config separately
+    }
+
+    /// Update detection thresholds without rebuilding the detector. Safe to call
+    /// between naps; calibration samples are preserved (use `reset()` to clear).
+    func updateConfig(_ newConfig: SleepDetectionConfig) {
+        state.config = newConfig
     }
 
     /// Add a new HRV feature set and evaluate sleep onset.

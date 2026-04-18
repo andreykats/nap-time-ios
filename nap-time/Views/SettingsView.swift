@@ -149,16 +149,30 @@ struct SettingsView: View {
                 HStack {
                     Text("Sensitivity")
                     Spacer()
-                    Text(sensitivityLabel)
-                        .foregroundStyle(.secondary)
+                    Text(sensitivityReadout)
+                        .font(.system(.body, design: .rounded, weight: .medium))
+                        .foregroundStyle(isAtDefaultSensitivity ? .indigo : .secondary)
+                        .monospacedDigit()
                 }
-                Slider(value: $sensitivity, in: 0.5...2.0, step: 0.1)
-                    .tint(.indigo)
+                Slider(
+                    value: $sensitivity,
+                    in: 0.5...2.0,
+                    step: 0.1,
+                    minimumValueLabel: Text("0.5")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary),
+                    maximumValueLabel: Text("2.0")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                ) {
+                    Text("Sensitivity")
+                }
+                .tint(.indigo)
             }
         } header: {
             Text("Sleep Detection")
         } footer: {
-            Text("Higher sensitivity detects sleep onset earlier but may trigger false alarms. Lower sensitivity is more conservative. The default (1.0) uses published research thresholds.")
+            Text("1.0 uses published research thresholds. Lower values are more conservative (fewer false alarms); higher values detect sleep onset earlier.")
         }
     }
 
@@ -179,7 +193,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var alarmSection: some View {
-        Section("Alarm") {
+        Section {
             Picker("Default Nap Duration", selection: $napDuration) {
                 Text("15 minutes").tag(15)
                 Text("20 minutes").tag(20)
@@ -194,6 +208,10 @@ struct SettingsView: View {
                 Text("5 minutes").tag(5)
                 Text("10 minutes").tag(10)
             }
+        } header: {
+            Text("Alarm")
+        } footer: {
+            Text("If sleep isn't detected, the alarm fires Nap Duration minutes after Start.")
         }
     }
 
@@ -216,13 +234,13 @@ struct SettingsView: View {
 
     // MARK: - Helpers
 
-    private var sensitivityLabel: String {
-        switch sensitivity {
-        case ..<0.8: "Low"
-        case 0.8..<1.2: "Normal"
-        case 1.2..<1.6: "High"
-        default: "Very High"
-        }
+    private var isAtDefaultSensitivity: Bool {
+        abs(sensitivity - 1.0) < 0.05
+    }
+
+    private var sensitivityReadout: String {
+        let formatted = String(format: "%.1f", sensitivity)
+        return isAtDefaultSensitivity ? "\(formatted)  •  Default" : formatted
     }
 
     private var connectionStatusText: String {

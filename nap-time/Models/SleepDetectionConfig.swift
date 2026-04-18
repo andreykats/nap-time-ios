@@ -24,7 +24,8 @@ struct SleepDetectionConfig: Sendable, Codable {
     /// HRV sliding window duration (seconds)
     var slidingWindowDuration: TimeInterval = 300  // 5 minutes
 
-    /// Nap duration after sleep onset (minutes)
+    /// Nap duration after sleep onset (minutes). Also used as the backstop:
+    /// if sleep is never detected, the alarm fires this long after Start.
     var napDurationMinutes: Int = 20
 
     /// Whether to auto-cancel alarm if early wake is detected

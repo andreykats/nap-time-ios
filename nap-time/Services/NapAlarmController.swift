@@ -54,12 +54,28 @@ final class NapAlarmController {
         sleepDetector.reset()
         session.reset()
 
-        config.napDurationMinutes = session.napDurationMinutes
+        // Pull live sensitivity from the same UserDefaults backing store that
+        // SettingsView's @AppStorage("sensitivity") writes to. Default 1.0 if
+        // the key was never written.
+        let sensitivity = UserDefaults.standard.object(forKey: "sensitivity") as? Double ?? 1.0
+        var newConfig = applyingSensitivity(sensitivity, to: SleepDetectionConfig())
+        newConfig.napDurationMinutes = session.napDurationMinutes
+        config = newConfig
+        sleepDetector.updateConfig(newConfig)
+
         napStartTime = .now
         session.startTime = .now
         session.state = .calibrating(progress: 0)
 
         startLiveActivity()
+
+        // Backstop alarm: if sleep is never detected, the alarm fires napDuration
+        // after Start. Replaced by the post-sleep alarm in handleDetectionResultOnMain
+        // on .sleepOnsetDetected (which reschedules napDuration after onset).
+        scheduleAlarm(
+            in: TimeInterval(config.napDurationMinutes * 60),
+            body: "Nap time is up — sleep wasn't detected."
+        )
 
         // HRV was auto-started on connect; re-issue idempotently in case the stream stalled.
         // (We don't call startHeartRateMonitoring — 0x69 HR and 0x69 HRV share the same
@@ -146,6 +162,19 @@ final class NapAlarmController {
         config = newConfig
     }
 
+    /// Scale the two threshold criteria by the user's sensitivity multiplier.
+    /// Higher s → smaller thresholds → easier to trip sleep detection (earlier
+    /// onset, more false positives). 1.0 returns the published-research defaults.
+    /// `requiredConsecutiveEpochs` is left untouched; dropping below 2 removes
+    /// the cross-epoch confirmation that protects against single-window noise.
+    private func applyingSensitivity(_ s: Double, to base: SleepDetectionConfig) -> SleepDetectionConfig {
+        var c = base
+        let clamped = max(0.5, min(2.0, s))
+        c.rmssdIncreaseSD = base.rmssdIncreaseSD / clamped
+        c.hrDropPercent   = base.hrDropPercent   / clamped
+        return c
+    }
+
     // MARK: - Detection Handling
 
     private var sleepOnsetTime: Date?
@@ -166,23 +195,31 @@ final class NapAlarmController {
             let now = Date.now
             sleepOnsetTime = now
             session.state = .sleepDetected(at: now)
-            scheduleAlarm()
-            let mins = config.napDurationMinutes
-            logger.info("Sleep onset detected, alarm scheduled for \(mins) minutes")
+
+            let duration = TimeInterval(config.napDurationMinutes * 60)
+            cancelAlarm()  // kills the backstop notification + task
+            scheduleAlarm(
+                in: duration,
+                body: "Time to wake up. You've been napping for \(config.napDurationMinutes) minutes."
+            )
+            let napMins = config.napDurationMinutes
+            logger.info("Sleep onset detected, alarm rescheduled \(napMins) min from onset")
             updateLiveActivity(
                 sleepDetectedAt: now,
-                wakeUpAt: now.addingTimeInterval(TimeInterval(mins * 60))
+                wakeUpAt: now.addingTimeInterval(duration)
             )
         }
     }
 
     // MARK: - Alarm Management
 
-    private func scheduleAlarm() {
-        let napDuration = TimeInterval(config.napDurationMinutes * 60)
+    /// Schedule the alarm notification + in-process timer. Called once at session start
+    /// (as a backstop) and again on sleep onset (replacing the backstop).
+    /// TODO: Replace with AlarmKit when iOS 26 SDK is available
+    private func scheduleAlarm(in duration: TimeInterval, body: String) {
+        // Kill any previously queued alarmTask so the state transition only fires once.
+        alarmTask?.cancel()
 
-        // Schedule a local notification as the alarm
-        // TODO: Replace with AlarmKit when iOS 26 SDK is available
         Task {
             let center = UNUserNotificationCenter.current()
             do {
@@ -198,12 +235,14 @@ final class NapAlarmController {
 
             let content = UNMutableNotificationContent()
             content.title = "Nap's Over!"
-            content.body = "Time to wake up. You've been napping for \(config.napDurationMinutes) minutes."
+            content.body = body
             content.sound = .defaultCritical
             content.interruptionLevel = .critical
 
+            // A second add() with the same identifier replaces the pending request —
+            // this is how the sleep-onset alarm overrides the backstop.
             let trigger = UNTimeIntervalNotificationTrigger(
-                timeInterval: napDuration,
+                timeInterval: max(1, duration),
                 repeats: false
             )
 
@@ -215,16 +254,15 @@ final class NapAlarmController {
 
             do {
                 try await center.add(request)
-                logger.info("Alarm notification scheduled for \(napDuration)s from now")
+                logger.info("Alarm notification scheduled for \(duration)s from now")
             } catch {
                 logger.error("Failed to schedule alarm: \(error.localizedDescription)")
             }
         }
 
-        // Also run a timer to update UI state when alarm fires
         alarmTask = Task { [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: .seconds(napDuration))
+            try? await Task.sleep(for: .seconds(duration))
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.session.state = .alarming
