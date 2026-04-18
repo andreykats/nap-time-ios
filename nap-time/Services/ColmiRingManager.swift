@@ -36,6 +36,8 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     private var keepAliveTimer: DispatchSourceTimer?
     private var shouldReconnect = false
 
+    private static let lastPeripheralIDKey = "ColmiRingManager.lastPeripheralID"
+
     // Stream continuations
     private var hrContinuation: AsyncStream<HeartRateReading>.Continuation?
     private var ibiContinuation: AsyncStream<InterBeatInterval>.Continuation?
@@ -94,16 +96,36 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         connectedPeripheral = peripheral
         peripheral.delegate = self
         shouldReconnect = true
+        UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: Self.lastPeripheralIDKey)
         centralManager.connect(peripheral)
         logger.info("Connecting to \(peripheral.name ?? "unknown", privacy: .public)")
     }
 
     func disconnect() {
         shouldReconnect = false
+        UserDefaults.standard.removeObject(forKey: Self.lastPeripheralIDKey)
         stopMonitoring()
         guard let peripheral = connectedPeripheral else { return }
         connectionState = .disconnecting
         centralManager.cancelPeripheralConnection(peripheral)
+    }
+
+    func attemptReconnectToLastRing() {
+        guard centralManager.state == .poweredOn else { return }
+        guard connectionState == .disconnected else { return }
+        guard let idString = UserDefaults.standard.string(forKey: Self.lastPeripheralIDKey),
+              let uuid = UUID(uuidString: idString) else { return }
+        let peripherals = centralManager.retrievePeripherals(withIdentifiers: [uuid])
+        guard let peripheral = peripherals.first else {
+            logger.info("Last ring \(idString, privacy: .public) not retrievable from system")
+            return
+        }
+        logger.info("Auto-reconnecting to last ring: \(peripheral.name ?? idString, privacy: .public)")
+        connectionState = .connecting
+        connectedPeripheral = peripheral
+        peripheral.delegate = self
+        shouldReconnect = true
+        centralManager.connect(peripheral)
     }
 
     func startHeartRateMonitoring() {
@@ -308,7 +330,9 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         MainActor.assumeIsolated {
             logger.info("Bluetooth state: \(central.state.rawValue)")
-            if central.state != .poweredOn {
+            if central.state == .poweredOn {
+                attemptReconnectToLastRing()
+            } else {
                 connectionState = .disconnected
                 isScanning = false
             }

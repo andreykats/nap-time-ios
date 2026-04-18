@@ -170,6 +170,7 @@ struct MainNapView: View {
             .buttonStyle(.borderedProminent)
             .tint(controller.session.isActive ? .red : .indigo)
             .controlSize(.large)
+            .disabled(!controller.session.isActive && (isRingDisconnected || isWarmingUp))
         }
     }
 
