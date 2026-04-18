@@ -33,7 +33,7 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     private var centralManager: CBCentralManager!
     private var rxCharacteristic: CBCharacteristic?
     private var txCharacteristic: CBCharacteristic?
-    private var keepAliveTimer: Timer?
+    private var keepAliveTimer: DispatchSourceTimer?
     private var shouldReconnect = false
 
     // Stream continuations
@@ -187,18 +187,25 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
 
     private func startKeepAliveTimer() {
         stopKeepAliveTimer()
-        keepAliveTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        // GCD timer on the main queue fires via CFRunLoopSource in common modes, which
+        // keeps running under `bluetooth-central` — unlike Timer.scheduledTimer which
+        // stops firing reliably once the app is backgrounded.
+        // The HRV CONTINUE packet (`0x69 0x0A 0x03`) prevents the ring from timing out
+        // the real-time session after ~2 min. The generic `0x1E` keep-alive only applies
+        // to the HR (0x69 0x01) stream; HRV (0x69 0x0A) needs its own CONTINUE.
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 10.0, repeating: 10.0, leeway: .seconds(1))
+        timer.setEventHandler { [weak self] in
             MainActor.assumeIsolated {
-                // Re-send the HRV CONTINUE packet to prevent the ring from timing out
-                // the real-time session. The generic `0x1E` keep-alive only applies to the
-                // HR (0x69 0x01) stream; HRV (0x69 0x0A) needs `0x69 [0x0A, CONTINUE]`.
                 self?.writeCommand(BLEConstants.continueHRVPacket())
             }
         }
+        timer.resume()
+        keepAliveTimer = timer
     }
 
     private func stopKeepAliveTimer() {
-        keepAliveTimer?.invalidate()
+        keepAliveTimer?.cancel()
         keepAliveTimer = nil
     }
 

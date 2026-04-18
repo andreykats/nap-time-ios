@@ -390,6 +390,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "Nap Time uses alarms to wake you after detecting sleep onset.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nap Time connects to your Colmi R02 ring to monitor heart rate during naps.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central";
@@ -425,6 +426,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "Nap Time uses alarms to wake you after detecting sleep onset.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nap Time connects to your Colmi R02 ring to monitor heart rate during naps.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = "bluetooth-central";

@@ -1,3 +1,4 @@
+@preconcurrency import ActivityKit
 import Foundation
 import Observation
 import os
@@ -28,6 +29,10 @@ final class NapAlarmController {
     private var monitoringTask: Task<Void, Never>?
     private var alarmTask: Task<Void, Never>?
     private var napStartTime: Date?
+    // An active Live Activity gets the app more generous background execution so BLE
+    // packets keep flowing during brief screen locks instead of being queued by iOS.
+    private var liveActivity: Activity<NapAlarmAttributes>?
+    private var lastActivityUpdate: Date?
 
     // MARK: - Init
 
@@ -53,6 +58,8 @@ final class NapAlarmController {
         napStartTime = .now
         session.startTime = .now
         session.state = .calibrating(progress: 0)
+
+        startLiveActivity()
 
         // HRV was auto-started on connect; re-issue idempotently in case the stream stalled.
         // (We don't call startHeartRateMonitoring — 0x69 HR and 0x69 HRV share the same
@@ -81,6 +88,7 @@ final class NapAlarmController {
                             if self.session.hrHistory.count > 600 {
                                 self.session.hrHistory.removeFirst()
                             }
+                            self.refreshLiveActivityThrottled()
                         }
                     }
                 }
@@ -118,6 +126,7 @@ final class NapAlarmController {
         // keeps showing a live BPM between naps. Full teardown happens on BLE disconnect.
         ringManager.finishStreams()
         cancelAlarm()
+        endLiveActivity()
 
         let summary = NapSession.NapSummary(
             startTime: napStartTime ?? .now,
@@ -154,11 +163,16 @@ final class NapAlarmController {
             break
 
         case .sleepOnsetDetected:
-            sleepOnsetTime = .now
-            session.state = .sleepDetected(at: .now)
+            let now = Date.now
+            sleepOnsetTime = now
+            session.state = .sleepDetected(at: now)
             scheduleAlarm()
             let mins = config.napDurationMinutes
             logger.info("Sleep onset detected, alarm scheduled for \(mins) minutes")
+            updateLiveActivity(
+                sleepDetectedAt: now,
+                wakeUpAt: now.addingTimeInterval(TimeInterval(mins * 60))
+            )
         }
     }
 
@@ -214,6 +228,7 @@ final class NapAlarmController {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.session.state = .alarming
+                self.updateLiveActivity(isAlarming: true)
             }
         }
     }
@@ -224,5 +239,70 @@ final class NapAlarmController {
         )
         alarmTask?.cancel()
         alarmTask = nil
+    }
+
+    // MARK: - Live Activity
+
+    private func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            logger.warning("Live Activities disabled by the user; background BLE may be throttled")
+            return
+        }
+        let attributes = NapAlarmAttributes(napDurationMinutes: config.napDurationMinutes)
+        let initialState = NapAlarmAttributes.ContentState(
+            sleepDetectedAt: nil,
+            wakeUpAt: nil,
+            currentHeartRate: session.currentHR,
+            isAlarming: false
+        )
+        do {
+            liveActivity = try Activity.request(
+                attributes: attributes,
+                content: .init(state: initialState, staleDate: nil)
+            )
+            lastActivityUpdate = .now
+            logger.info("Live Activity started")
+        } catch {
+            logger.error("Failed to start Live Activity: \(error.localizedDescription)")
+        }
+    }
+
+    /// Push a new HR into the Live Activity, but at most once every 5s. ActivityKit has
+    /// a per-process update budget; unconditional HR updates at 2 Hz would exhaust it.
+    private func refreshLiveActivityThrottled() {
+        guard liveActivity != nil else { return }
+        if let last = lastActivityUpdate, Date.now.timeIntervalSince(last) < 5.0 { return }
+        lastActivityUpdate = .now
+        updateLiveActivity()
+    }
+
+    /// Update the Live Activity. Omitted fields retain their current value.
+    private func updateLiveActivity(
+        sleepDetectedAt: Date? = nil,
+        wakeUpAt: Date? = nil,
+        isAlarming: Bool? = nil
+    ) {
+        guard let activity = liveActivity else { return }
+        let current = activity.content.state
+        let newState = NapAlarmAttributes.ContentState(
+            sleepDetectedAt: sleepDetectedAt ?? current.sleepDetectedAt,
+            wakeUpAt: wakeUpAt ?? current.wakeUpAt,
+            currentHeartRate: session.currentHR,
+            isAlarming: isAlarming ?? current.isAlarming
+        )
+        Task { @MainActor in
+            await activity.update(.init(state: newState, staleDate: nil))
+        }
+    }
+
+    private func endLiveActivity() {
+        guard let activity = liveActivity else { return }
+        let finalState = activity.content.state
+        liveActivity = nil
+        lastActivityUpdate = nil
+        Task { @MainActor in
+            await activity.end(.init(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
+        }
+        logger.info("Live Activity ended")
     }
 }
