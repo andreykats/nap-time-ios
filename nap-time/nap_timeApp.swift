@@ -6,9 +6,12 @@
 //
 
 import SwiftUI
+import UIKit
 
 @main
 struct nap_timeApp: App {
+    @AppStorage("preventAutoLock") private var preventAutoLock: Bool = false
+
     init() {
         // Sensitivity slider was redesigned around an explicit 1.0 default with a
         // visible "Default" badge. Older builds let users land on values they
@@ -25,6 +28,12 @@ struct nap_timeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear {
+                    UIApplication.shared.isIdleTimerDisabled = preventAutoLock
+                }
+                .onChange(of: preventAutoLock) { _, newValue in
+                    UIApplication.shared.isIdleTimerDisabled = newValue
+                }
         }
     }
 }

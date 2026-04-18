@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage("napDuration") private var napDuration: Int = 20
     @AppStorage("autoCancelOnWake") private var autoCancelOnWake: Bool = true
     @AppStorage("snoozeDuration") private var snoozeDuration: Int = 5
+    @AppStorage("preventAutoLock") private var preventAutoLock: Bool = false
 
     var body: some View {
         Form {
@@ -18,6 +19,7 @@ struct SettingsView: View {
             detectionSection
             calibrationSection
             alarmSection
+            displaySection
             aboutSection
         }
         .navigationTitle("Settings")
@@ -228,6 +230,17 @@ struct SettingsView: View {
             Text("Alarm")
         } footer: {
             Text("If sleep isn't detected, the alarm fires Nap Duration minutes after Start.")
+        }
+    }
+
+    @ViewBuilder
+    private var displaySection: some View {
+        Section {
+            Toggle("Keep Screen Awake", isOn: $preventAutoLock)
+        } header: {
+            Text("Display")
+        } footer: {
+            Text("Prevents iPhone auto-lock while nap-time is open.")
         }
     }
 
