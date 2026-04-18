@@ -17,3 +17,6 @@ Package.resolved
 
 # Crash reports
 *.ips
+
+# Claude Code
+.claude/
