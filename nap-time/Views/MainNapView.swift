@@ -33,12 +33,6 @@ struct MainNapView: View {
 
             Spacer()
 
-            if case .calibrating(let progress) = controller.session.state {
-                ProgressView(value: progress)
-                    .frame(width: 60)
-                    .tint(.indigo)
-            }
-
             if displayedHR > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "heart.fill")
@@ -202,7 +196,7 @@ struct MainNapView: View {
             case .disconnected, .connected: return "Ring not connected"
             }
         }
-        return isWarmingUp ? "Warming up.." : controller.session.statusText
+        return isWarmingUp ? "Detecting heartbeat.." : controller.session.statusText
     }
 
     private var statusColor: Color {
