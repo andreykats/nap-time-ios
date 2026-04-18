@@ -16,6 +16,15 @@ struct MainNapView: View {
             .padding()
         }
         .navigationTitle("Nap Time")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    SettingsView(ringManager: ringManager)
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                }
+            }
+        }
     }
 
     // MARK: - Status Card
