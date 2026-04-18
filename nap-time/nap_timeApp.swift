@@ -5,6 +5,7 @@
 //  Created by Andrey Kats on 4/15/26.
 //
 
+import SwiftData
 import SwiftUI
 import UIKit
 
@@ -35,5 +36,6 @@ struct nap_timeApp: App {
                     UIApplication.shared.isIdleTimerDisabled = newValue
                 }
         }
+        .modelContainer(for: SavedNapSession.self)
     }
 }

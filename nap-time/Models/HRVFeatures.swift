@@ -1,8 +1,8 @@
 import Foundation
 
 /// Computed HRV feature set from a 5-minute sliding window of IBIs.
-struct HRVFeatures: Sendable, Identifiable {
-    let id = UUID()
+struct HRVFeatures: Sendable, Identifiable, Codable {
+    var id = UUID()
     let timestamp: Date
 
     // Time domain

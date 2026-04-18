@@ -28,6 +28,8 @@ final class NapSession {
     var hrvHistory: [HRVFeatures] = []
     var napDurationMinutes: Int = 20
     var startTime: Date?
+    var sleepOnsetTime: Date?
+    var calibrationDurationSeconds: TimeInterval = 300
 
     var isActive: Bool {
         switch state {
@@ -47,7 +49,7 @@ final class NapSession {
         case .calibrating(let progress):
             return "Calibrating... \(Int(progress * 100))%"
         case .monitoring:
-            return "Monitoring — waiting for sleep"
+            return "Waiting for sleep.."
         case .sleepDetected(let at):
             let remaining = Double(napDurationMinutes * 60) - Date.now.timeIntervalSince(at)
             let mins = max(0, Int(remaining) / 60)
@@ -68,5 +70,6 @@ final class NapSession {
         hrHistory = []
         hrvHistory = []
         startTime = nil
+        sleepOnsetTime = nil
     }
 }

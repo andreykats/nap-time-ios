@@ -75,55 +75,115 @@ struct MainNapView: View {
 
     @ViewBuilder
     private var hrChartSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Heart Rate")
-                .font(.headline)
+        NavigationLink {
+            NapHistoryView()
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Heart Rate")
+                    .font(.headline)
 
-            let recentReadings = Array(controller.session.hrHistory.suffix(300))
-            if recentReadings.isEmpty {
-                ContentUnavailableView(
-                    "No Data Yet",
-                    systemImage: "heart.text.clipboard",
-                    description: Text("Heart rate readings will appear here once the ring starts streaming.")
-                )
-                .frame(height: 180)
-            } else {
-                Chart(recentReadings) { reading in
-                    LineMark(
-                        x: .value("Time", reading.timestamp),
-                        y: .value("BPM", reading.bpm)
+                let readings = controller.session.hrHistory
+                if readings.isEmpty {
+                    ContentUnavailableView(
+                        "No Data Yet",
+                        systemImage: "heart.text.clipboard",
+                        description: Text("Heart rate readings will appear here once the ring starts streaming.")
                     )
-                    .foregroundStyle(.red.gradient)
-                    .interpolationMethod(.catmullRom)
+                    .frame(height: 180)
+                } else {
+                    Chart {
+                        ForEach(readings) { reading in
+                            LineMark(
+                                x: .value("Time", elapsed(reading.timestamp)),
+                                y: .value("BPM", reading.bpm)
+                            )
+                            .foregroundStyle(.red.gradient)
+                            .interpolationMethod(.catmullRom)
+                        }
+
+                        if let calibEnd = calibrationEndTime {
+                            RuleMark(x: .value("Calibration end", elapsed(calibEnd)))
+                                .foregroundStyle(.secondary.opacity(0.8))
+                                .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        }
+
+                        if let onset = controller.session.sleepOnsetTime {
+                            RuleMark(x: .value("Sleep onset", elapsed(onset)))
+                                .foregroundStyle(.green.opacity(0.8))
+                                .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        }
+                    }
+                    .chartXAxis {
+                        AxisMarks { value in
+                            AxisGridLine()
+                            AxisValueLabel {
+                                if let s = value.as(TimeInterval.self) {
+                                    Text(mmss(s))
+                                }
+                            }
+                        }
+                    }
+                    .chartYScale(domain: yAxisDomain(for: readings))
+                    .frame(height: 180)
                 }
-                .chartYScale(domain: yAxisDomain(for: recentReadings))
-                .frame(height: 180)
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
+            .contentShape(.rect(cornerRadius: 16))
         }
-        .padding()
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
+        .buttonStyle(.plain)
     }
 
     // MARK: - HRV Section
 
     @ViewBuilder
     private var hrvSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("HRV Analysis")
-                .font(.headline)
+        NavigationLink {
+            NapHistoryView()
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("HRV Analysis")
+                    .font(.headline)
 
-            HRVChartView(hrvHistory: Array(controller.session.hrvHistory.suffix(30)))
+                HRVChartView(
+                    hrvHistory: controller.session.hrvHistory,
+                    startTime: controller.session.startTime,
+                    calibrationEndTime: calibrationEndTime,
+                    sleepOnsetTime: controller.session.sleepOnsetTime
+                )
 
-            if let latest = controller.session.hrvHistory.last {
-                HStack(spacing: 16) {
-                    metricView(label: "RMSSD", value: String(format: "%.0f", latest.rmssd), unit: "ms")
-                    metricView(label: "SDNN", value: String(format: "%.0f", latest.sdnn), unit: "ms")
-                    metricView(label: "LF/HF", value: String(format: "%.2f", latest.lfHfRatio), unit: "")
+                if let latest = controller.session.hrvHistory.last {
+                    HStack(spacing: 16) {
+                        metricView(label: "RMSSD", value: String(format: "%.0f", latest.rmssd), unit: "ms")
+                        metricView(label: "SDNN", value: String(format: "%.0f", latest.sdnn), unit: "ms")
+                        metricView(label: "LF/HF", value: String(format: "%.2f", latest.lfHfRatio), unit: "")
+                    }
                 }
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
+            .contentShape(.rect(cornerRadius: 16))
         }
-        .padding()
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
+        .buttonStyle(.plain)
+    }
+
+    private func elapsed(_ date: Date) -> TimeInterval {
+        guard let start = controller.session.startTime else { return 0 }
+        return date.timeIntervalSince(start)
+    }
+
+    private var calibrationEndTime: Date? {
+        guard let start = controller.session.startTime else { return nil }
+        return start.addingTimeInterval(controller.session.calibrationDurationSeconds)
+    }
+
+    private func yAxisDomain(for readings: [HeartRateReading]) -> ClosedRange<Int> {
+        let bpms = readings.map(\.bpm)
+        let minBPM = max(30, (bpms.min() ?? 40) - 10)
+        let maxBPM = min(200, (bpms.max() ?? 120) + 10)
+        return minBPM...maxBPM
     }
 
     @ViewBuilder
@@ -205,7 +265,7 @@ struct MainNapView: View {
             case .disconnected, .connected: return "Ring not connected"
             }
         }
-        return isWarmingUp ? "Detecting heartbeat.." : controller.session.statusText
+        return isWarmingUp ? "Waiting for heartbeat.." : controller.session.statusText
     }
 
     private var statusColor: Color {
@@ -231,10 +291,4 @@ struct MainNapView: View {
         }
     }
 
-    private func yAxisDomain(for readings: [HeartRateReading]) -> ClosedRange<Int> {
-        let bpms = readings.map(\.bpm)
-        let minBPM = max(30, (bpms.min() ?? 40) - 10)
-        let maxBPM = min(200, (bpms.max() ?? 120) + 10)
-        return minBPM...maxBPM
-    }
 }

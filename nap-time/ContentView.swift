@@ -1,6 +1,8 @@
+import SwiftData
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var ringManager = ColmiRingManager()
     @State private var napController: NapAlarmController?
 
@@ -14,7 +16,11 @@ struct ContentView: View {
         }
         .onAppear {
             if napController == nil {
-                napController = NapAlarmController(ringManager: ringManager)
+                let controller = NapAlarmController(ringManager: ringManager)
+                controller.modelContext = modelContext
+                napController = controller
+            } else {
+                napController?.modelContext = modelContext
             }
         }
     }

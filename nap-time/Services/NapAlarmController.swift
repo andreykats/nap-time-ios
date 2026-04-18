@@ -3,6 +3,7 @@ import AlarmKit
 import Foundation
 import Observation
 import os
+import SwiftData
 import SwiftUI
 
 private let logger = Logger(subsystem: "com.andreykats.nap-time", category: "Alarm")
@@ -16,6 +17,9 @@ final class NapAlarmController {
 
     let ringManager: ColmiRingManager
     var session: NapSession
+    /// Injected from ContentView once SwiftUI's @Environment ModelContext is available.
+    /// Used by stopNap() to persist completed sessions that reached calibration-complete.
+    var modelContext: ModelContext?
 
     // MARK: - Private State
 
@@ -25,6 +29,7 @@ final class NapAlarmController {
     private var monitoringTask: Task<Void, Never>?
     private var alarmTask: Task<Void, Never>?
     private var napStartTime: Date?
+    private var didCompleteCalibration = false
     // An active Live Activity gets the app more generous background execution so BLE
     // packets keep flowing during brief screen locks instead of being queued by iOS.
     private var liveActivity: Activity<NapAlarmAttributes>?
@@ -50,6 +55,8 @@ final class NapAlarmController {
         hrvCalculator.reset()
         sleepDetector.reset()
         session.reset()
+        didCompleteCalibration = false
+        sleepOnsetTime = nil
 
         // Pull live sensitivity from the same UserDefaults backing store that
         // SettingsView's @AppStorage("sensitivity") writes to. Default 1.0 if
@@ -62,6 +69,8 @@ final class NapAlarmController {
 
         napStartTime = .now
         session.startTime = .now
+        session.sleepOnsetTime = nil
+        session.calibrationDurationSeconds = newConfig.calibrationDuration
         session.state = .calibrating(progress: 0)
 
         startLiveActivity()
@@ -94,8 +103,9 @@ final class NapAlarmController {
                             guard let self else { return }
                             self.session.currentHR = reading.bpm
                             self.session.hrHistory.append(reading)
-                            // Keep last 600 readings (~10 min at 1/s)
-                            if self.session.hrHistory.count > 600 {
+                            // Safety ceiling for a very long session — 60 min at 1 Hz. The chart
+                            // shows the full array, so this is not a sliding display window.
+                            if self.session.hrHistory.count > 3600 {
                                 self.session.hrHistory.removeFirst()
                             }
                             self.refreshLiveActivityThrottled()
@@ -112,7 +122,8 @@ final class NapAlarmController {
                             await MainActor.run { [weak self] in
                                 guard let self else { return }
                                 self.session.hrvHistory.append(features)
-                                if self.session.hrvHistory.count > 60 {
+                                // ~100 min of 30-s HRV epochs; safety ceiling only.
+                                if self.session.hrvHistory.count > 200 {
                                     self.session.hrvHistory.removeFirst()
                                 }
                                 self.handleDetectionResultOnMain(result)
@@ -138,16 +149,42 @@ final class NapAlarmController {
         cancelAlarm()
         endLiveActivity()
 
+        let endTime = Date.now
+        let startTime = napStartTime ?? endTime
+        let averageHR = session.hrHistory.isEmpty ? 0 :
+            Double(session.hrHistory.map(\.bpm).reduce(0, +)) / Double(session.hrHistory.count)
+        let averageRMSSD = session.hrvHistory.isEmpty ? 0 :
+            session.hrvHistory.map(\.rmssd).reduce(0, +) / Double(session.hrvHistory.count)
+
         let summary = NapSession.NapSummary(
-            startTime: napStartTime ?? .now,
+            startTime: startTime,
             sleepOnsetTime: sleepOnsetTime,
-            endTime: .now,
-            averageHR: session.hrHistory.isEmpty ? 0 :
-                Double(session.hrHistory.map(\.bpm).reduce(0, +)) / Double(session.hrHistory.count),
-            averageRMSSD: session.hrvHistory.isEmpty ? 0 :
-                session.hrvHistory.map(\.rmssd).reduce(0, +) / Double(session.hrvHistory.count)
+            endTime: endTime,
+            averageHR: averageHR,
+            averageRMSSD: averageRMSSD
         )
         session.state = .completed(summary: summary)
+
+        if didCompleteCalibration, let ctx = modelContext {
+            let saved = SavedNapSession(
+                startTime: startTime,
+                endTime: endTime,
+                calibrationDurationSeconds: config.calibrationDuration,
+                sleepOnsetTime: sleepOnsetTime,
+                napDurationMinutes: config.napDurationMinutes,
+                averageHR: averageHR,
+                averageRMSSD: averageRMSSD,
+                hrHistory: session.hrHistory,
+                hrvHistory: session.hrvHistory
+            )
+            ctx.insert(saved)
+            do {
+                try ctx.save()
+                logger.info("Saved nap session to history (\(saved.hrHistory.count) HR, \(saved.hrvHistory.count) HRV samples)")
+            } catch {
+                logger.error("Failed to save nap session: \(error.localizedDescription)")
+            }
+        }
 
         logger.info("Nap session stopped")
     }
@@ -180,6 +217,7 @@ final class NapAlarmController {
 
         case .calibrationComplete:
             session.state = .monitoring
+            didCompleteCalibration = true
             logger.info("Calibration complete, now monitoring for sleep onset")
 
         case .awake:
@@ -188,6 +226,7 @@ final class NapAlarmController {
         case .sleepOnsetDetected:
             let now = Date.now
             sleepOnsetTime = now
+            session.sleepOnsetTime = now
             session.state = .sleepDetected(at: now)
 
             let duration = TimeInterval(config.napDurationMinutes * 60)
