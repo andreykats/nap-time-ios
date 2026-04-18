@@ -57,12 +57,28 @@ struct SettingsView: View {
             }
 
             if let peripheral = ringManager.connectedPeripheral {
-                HStack {
-                    Text("Connected to")
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                LabeledContent("Device") {
                     Text(peripheral.name ?? "Unknown Ring")
-                        .fontWeight(.medium)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
+
+                if let firmware = ringManager.firmwareVersion {
+                    LabeledContent("Firmware") {
+                        Text(firmware)
+                            .font(.system(.subheadline, design: .monospaced))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                }
+
+                if let hardware = ringManager.hardwareVersion {
+                    LabeledContent("Hardware") {
+                        Text(hardware)
+                            .font(.system(.subheadline, design: .monospaced))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
                 }
 
                 Button("Disconnect", role: .destructive) {

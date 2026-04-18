@@ -19,6 +19,8 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     var batteryLevel: Int?
     var isCharging = false
     var latestHR: Int = 0
+    var firmwareVersion: String?
+    var hardwareVersion: String?
 
     enum ConnectionState: Sendable {
         case disconnected
@@ -363,7 +365,7 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         MainActor.assumeIsolated {
             connectionState = .connected
             logger.info("Connected to \(peripheral.name ?? "unknown", privacy: .public)")
-            peripheral.discoverServices([BLEConstants.serviceUUID])
+            peripheral.discoverServices([BLEConstants.serviceUUID, BLEConstants.deviceInfoServiceUUID])
         }
     }
 
@@ -388,6 +390,8 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
             rxCharacteristic = nil
             txCharacteristic = nil
             stopKeepAliveTimer()
+            firmwareVersion = nil
+            hardwareVersion = nil
 
             if let error {
                 logger.warning("Disconnected with error: \(error.localizedDescription)")
@@ -409,11 +413,21 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         MainActor.assumeIsolated {
             guard let services = peripheral.services else { return }
-            for service in services where service.uuid == BLEConstants.serviceUUID {
-                peripheral.discoverCharacteristics(
-                    [BLEConstants.rxCharUUID, BLEConstants.txCharUUID],
-                    for: service
-                )
+            for service in services {
+                switch service.uuid {
+                case BLEConstants.serviceUUID:
+                    peripheral.discoverCharacteristics(
+                        [BLEConstants.rxCharUUID, BLEConstants.txCharUUID],
+                        for: service
+                    )
+                case BLEConstants.deviceInfoServiceUUID:
+                    peripheral.discoverCharacteristics(
+                        [BLEConstants.firmwareRevisionUUID, BLEConstants.hardwareRevisionUUID],
+                        for: service
+                    )
+                default:
+                    break
+                }
             }
         }
     }
@@ -434,6 +448,8 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
                     txCharacteristic = char
                     peripheral.setNotifyValue(true, for: char)
                     logger.info("Found TX characteristic, subscribed to notifications")
+                case BLEConstants.firmwareRevisionUUID, BLEConstants.hardwareRevisionUUID:
+                    peripheral.readValue(for: char)
                 default:
                     break
                 }
@@ -456,11 +472,23 @@ final class ColmiRingManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         error: Error?
     ) {
         MainActor.assumeIsolated {
-            guard characteristic.uuid == BLEConstants.txCharUUID,
-                  let data = characteristic.value else {
-                return
+            guard let data = characteristic.value else { return }
+            switch characteristic.uuid {
+            case BLEConstants.txCharUUID:
+                handleNotification(data: data)
+            case BLEConstants.firmwareRevisionUUID:
+                let value = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                firmwareVersion = (value?.isEmpty == false) ? value : nil
+                logger.info("Firmware version: \(self.firmwareVersion ?? "unknown", privacy: .public)")
+            case BLEConstants.hardwareRevisionUUID:
+                let value = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                hardwareVersion = (value?.isEmpty == false) ? value : nil
+                logger.info("Hardware version: \(self.hardwareVersion ?? "unknown", privacy: .public)")
+            default:
+                break
             }
-            handleNotification(data: data)
         }
     }
 

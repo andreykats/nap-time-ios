@@ -9,6 +9,12 @@ enum BLEConstants {
     static let txCharUUID  = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
     static let packetSize  = 16
 
+    /// Standard BLE Device Information Service — exposes firmware/hardware versions
+    /// as UTF-8 string GATT characteristics (read once, not via the proprietary 0x69 protocol).
+    static let deviceInfoServiceUUID = CBUUID(string: "180A")
+    static let firmwareRevisionUUID  = CBUUID(string: "2A26")
+    static let hardwareRevisionUUID  = CBUUID(string: "2A27")
+
     /// Known device name prefixes for Colmi-compatible rings.
     /// The ring does NOT advertise its service UUID — discovery is name-based only.
     /// Source: github.com/tahnok/colmi_r02_client
