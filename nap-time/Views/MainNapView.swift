@@ -223,10 +223,15 @@ struct MainNapView: View {
             }
 
             Button(action: toggleNap) {
-                Label(
-                    controller.session.isActive ? "Stop" : "Start Nap",
-                    systemImage: controller.session.isActive ? "stop.fill" : "play.fill"
-                )
+                HStack(spacing: 8) {
+                    if let start = controller.session.startTime, controller.session.isActive {
+                        Text(start, style: .timer)
+                            .font(.title3.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    Image(systemName: controller.session.isActive ? "stop.fill" : "play.fill")
+                    Text(controller.session.isActive ? "Stop" : "Start Nap")
+                }
                 .font(.title3.bold())
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -260,7 +265,7 @@ struct MainNapView: View {
         if isRingDisconnected {
             switch ringManager.connectionState {
             case .scanning: return "Scanning for ring.."
-            case .connecting: return "Connecting to ring.."
+            case .connecting: return "Connecting.."
             case .disconnecting: return "Disconnecting.."
             case .disconnected, .connected: return "Ring not connected"
             }
